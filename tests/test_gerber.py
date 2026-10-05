@@ -24,7 +24,7 @@ def test_region_square_area():
 
 
 def test_circle_flash_area():
-    geom = run("%ADD10C,2.0*%\nD10*\nX5000Y5000D03*")
+    geom = run("%ADD10C,2.0*%\nD10*\nX5000Y5000D03*", tol=0.001)
     assert geom.area == pytest.approx(math.pi, rel=1e-3)
 
 
@@ -71,7 +71,7 @@ def test_arc_radius_mismatch_rejected():
 def test_lpc_subtract_then_lpd_restore():
     body = ("%ADD10C,2.0*%\nD10*\n%LPD*%\nX0Y0D03*\n"
             "%LPC*%\nX0Y0D03*\n%LPD*%\nX0Y0D03*")
-    geom = run(body)
+    geom = run(body, tol=0.001)
     assert geom.area == pytest.approx(math.pi, rel=1e-3)
 
 
@@ -88,7 +88,7 @@ def test_lpc_creates_hole():
 
 def test_inch_units():
     p = Parser("%FSLAX24Y24*%\n%MOIN*%\n%ADD10C,0.1*%\nD10*\nX0Y0D03*\nM02*\n")
-    geom = build_geometry(p.parse(), p.apertures, 0.01)
+    geom = build_geometry(p.parse(), p.apertures, 0.001)
     assert geom.area == pytest.approx(math.pi * (2.54 / 2) ** 2, rel=1e-3)
 
 

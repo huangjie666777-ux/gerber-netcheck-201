@@ -40,6 +40,8 @@ class Parser:
         self.interpolation = "G01"
         self.multi_quadrant = False
         self.in_region = False
+        self.region_line = None
+        self.region_source = None
         self.pos = {"X": None, "Y": None}
         self.operation = None          # 模态 D01/D02/D03
         self.events = []
@@ -121,9 +123,15 @@ class Parser:
         if extended:
             raise GerberError("扩展指令未以 % 结束", ext_line, ext_buf)
         if self.in_region:
-            raise GerberError("文件截断: G36 区域缺少 G37 结束")
+            raise GerberError("文件截断: G36 区域缺少 G37 结束",
+                              self.region_line, self.region_source)
         if not self.ended:
-            raise GerberError("文件截断: 缺少 M02 结束指令")
+            last_line = self.text.count("\n") + 1
+            last_src = (self.text.rstrip("\n").split("\n")[-1].strip()
+                        if self.text.strip() else None)
+            raise GerberError("文件截断: 缺少 M02 结束指令",
+                              last_line if self.text.strip() else None,
+                              last_src)
         return self.events
 
     # ---- 扩展指令 ----
@@ -209,6 +217,8 @@ class Parser:
                 if self.in_region:
                     raise GerberError("区域嵌套(G36 内再次出现 G36)", line, source)
                 self.in_region = True
+                self.region_line = line
+                self.region_source = source
                 self.events.append(Event("region_start", line, source, {}))
             elif g == 37:
                 if not self.in_region:
