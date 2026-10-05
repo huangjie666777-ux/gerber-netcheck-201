@@ -40,10 +40,9 @@ def geometry_to_svg(geom):
     body = "".join(paths)
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" '
-        'viewBox="%s 0 %s %s" width="%smm" height="%smm">\n'
+        'viewBox="0 0 %s %s" width="%smm" height="%smm">\n'
         '<g transform="translate(%s,0)" fill="#b87333" '
         'fill-rule="evenodd" stroke="none">%s</g>\n</svg>\n'
-        % (_fmt(minx), _fmt(width), _fmt(height),
+        % (_fmt(width), _fmt(height),
            _fmt(width), _fmt(height), _fmt(-minx), body)
     )
-

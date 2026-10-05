@@ -1,0 +1,55 @@
+{
+  "terminals": [
+    {
+      "id": "T1",
+      "net": "GND",
+      "layer": "top",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "id": "T2",
+      "net": "GND",
+      "layer": "bottom",
+      "x": 18,
+      "y": 8
+    },
+    {
+      "id": "T3",
+      "net": "VCC",
+      "layer": "top",
+      "x": 25,
+      "y": 5.7
+    },
+    {
+      "id": "T4",
+      "net": "VCC",
+      "layer": "bottom",
+      "x": 25,
+      "y": 5.7
+    }
+  ],
+  "holes": [
+    {
+      "id": "H1",
+      "x": 5,
+      "y": 5,
+      "diameter": 1.5,
+      "plated": true
+    },
+    {
+      "id": "H2",
+      "x": 15,
+      "y": 5,
+      "diameter": 2,
+      "plated": false
+    },
+    {
+      "id": "H3",
+      "x": 25,
+      "y": 5,
+      "diameter": 1,
+      "plated": true
+    }
+  ]
+}

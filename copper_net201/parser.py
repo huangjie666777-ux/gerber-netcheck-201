@@ -44,6 +44,10 @@ class Parser:
         self.operation = None          # 模态 D01/D02/D03
         self.events = []
         self.ended = False
+        self._last_line = None         # 最近指令位置(用于截断报错)
+        self._last_src = None
+        self._region_line = None       # 当前 G36 区域起点
+        self._region_src = None
 
     # ---- 坐标解码: 前导零省略, 绝对坐标 ----
     def _coord(self, axis, raw, line, source):
@@ -74,11 +78,12 @@ class Parser:
                 buf = ""
                 started = False
             else:
-                if ch == "\n":
-                    line += 1
-                if not started and not ch.isspace():
+                if not started:
+                    # 记录块首字符(含前导空白)所在行, 供行号推算
                     started = True
                     start_line = line
+                if ch == "\n":
+                    line += 1
                 buf += ch
         if buf.strip():
             raw_blocks.append((start_line, buf))
@@ -121,13 +126,16 @@ class Parser:
         if extended:
             raise GerberError("扩展指令未以 % 结束", ext_line, ext_buf)
         if self.in_region:
-            raise GerberError("文件截断: G36 区域缺少 G37 结束")
+            raise GerberError("文件截断: G36 区域缺少 G37 结束",
+                              self._region_line, self._region_src)
         if not self.ended:
-            raise GerberError("文件截断: 缺少 M02 结束指令")
+            raise GerberError("文件截断: 缺少 M02 结束指令",
+                              self._last_line, self._last_src)
         return self.events
 
     # ---- 扩展指令 ----
     def _extended(self, body, line, source):
+        self._last_line, self._last_src = line, source
         body = body.strip()
         m = re.fullmatch(r"FS([LT])([AI])X(\d)(\d)Y(\d)(\d)", body)
         if m:
@@ -175,6 +183,7 @@ class Parser:
 
     # ---- 普通指令块 ----
     def _block(self, chunk, line, source):
+        self._last_line, self._last_src = line, source
         if chunk.startswith("G04"):
             return  # 注释
         pos = 0
@@ -209,6 +218,7 @@ class Parser:
                 if self.in_region:
                     raise GerberError("区域嵌套(G36 内再次出现 G36)", line, source)
                 self.in_region = True
+                self._region_line, self._region_src = line, source
                 self.events.append(Event("region_start", line, source, {}))
             elif g == 37:
                 if not self.in_region:

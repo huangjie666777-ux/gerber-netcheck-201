@@ -13,7 +13,14 @@ from shapely.ops import unary_union
 
 from .errors import GerberError
 
-_BUFFER_RESOLUTION = 32  # 缓冲每象限分段数
+def _quad_segs(radius, tol):
+    """由弦高误差推导 buffer 每象限分段数(留 4 倍余量, 保证 <= tol)。"""
+    if radius <= 0:
+        return 1
+    sagitta = tol / 4.0
+    if sagitta >= radius:
+        return 1
+    return max(1, math.ceil(math.pi / (2.0 * math.acos(1 - sagitta / radius))))
 
 
 def arc_points(x1, y1, x2, y2, i, j, direction, tol, line, source):
@@ -57,19 +64,20 @@ def arc_points(x1, y1, x2, y2, i, j, direction, tol, line, source):
     return pts
 
 
-def _stroke(pts, width):
+def _stroke(pts, width, tol):
     return LineString(pts).buffer(
         width / 2.0,
         cap_style="round",
         join_style="round",
-        quad_segs=_BUFFER_RESOLUTION,
+        quad_segs=_quad_segs(width / 2.0, tol),
     )
 
 
-def _flash(aperture, x, y):
+def _flash(aperture, x, y, tol):
     if aperture.kind == "C":
         return Point(x, y).buffer(aperture.params[0] / 2.0,
-                                  quad_segs=_BUFFER_RESOLUTION * 4)
+                                  quad_segs=_quad_segs(aperture.params[0] / 2.0,
+                                                       tol))
     w, h = aperture.params
     return box(x - w / 2.0, y - h / 2.0, x + w / 2.0, y + h / 2.0)
 
@@ -95,7 +103,7 @@ def build_geometry(events, apertures, tol):
             dark = ev.data["dark"]
         elif ev.kind == "flash":
             expose(_flash(apertures[ev.data["aperture"]],
-                          ev.data["x"], ev.data["y"]))
+                          ev.data["x"], ev.data["y"], tol))
         elif ev.kind == "draw":
             d = ev.data
             ap = apertures[d["aperture"]]
@@ -109,7 +117,7 @@ def build_geometry(events, apertures, tol):
             else:
                 pts = [(d["x1"], d["y1"]), (d["x2"], d["y2"])]
             width = ap.params[0]  # 绘制仅圆形光圈
-            expose(_stroke(pts, width))
+            expose(_stroke(pts, width, tol))
         elif ev.kind == "region_start":
             region_pts = []
             region_start_line = ev.line

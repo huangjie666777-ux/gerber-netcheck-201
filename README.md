@@ -7,7 +7,9 @@
 - `copper_net201/parser.py` — 词法/语法解析, 输出事件流(含原文行号定位)
 - `copper_net201/geometry.py` — 曝光几何引擎: 圆弧离散、光圈缓冲、区域填充、LPD/LPC 按序合成(Shapely)
 - `copper_net201/svg_export.py` — 最终几何 → SVG(Y 轴翻转、evenodd 孔洞)
-- `main.py` — FastAPI 请求处理: 上传、参数校验、错误响应、结果暂存
+- `copper_net201/netlist.py` — JSON 网表解析与校验(端子/圆孔、重复 ID、非有限值、孔冲突)
+- `copper_net201/netcheck.py` — 扣孔、铜岛划分、镀铜孔桥接、实际网络与短路/断路报告
+- `main.py` — FastAPI 请求处理: 上传、参数校验、错误响应、结果暂存、网表核对
 
 ## 支持的 Gerber 子集
 
@@ -64,6 +66,63 @@ curl -s -F "file=@samples/sample1.gbr" -F "tolerance=0.01" http://127.0.0.1:8000
 ```bash
 curl -OJ http://127.0.0.1:8000/api/rebuild/<svg_id>/svg
 ```
+
+## 双层板网表核对
+
+### POST /api/netcheck
+
+multipart 一次上传: `top` = 顶层 Gerber; `bottom` = 底层 Gerber; `netlist` = JSON 网表;
+`tolerance` = 曲线近似误差(mm, 正数, 默认 0.01)。两层须为同一板坐标系, 不自动镜像。
+任一步失败整体返回 422, 不交付部分结果。
+
+```bash
+curl -s -F "top=@samples/netcheck_top.gbr" -F "bottom=@samples/netcheck_bottom.gbr" \
+     -F "netlist=@samples/netlist.json" -F "tolerance=0.01" \
+     http://127.0.0.1:8000/api/netcheck
+```
+
+网表 JSON 格式(坐标毫米):
+
+```json
+{
+  "terminals": [{"id": "T1", "net": "GND", "layer": "top", "x": 2.0, "y": 2.0}],
+  "holes": [{"id": "H1", "x": 5.0, "y": 5.0, "diameter": 1.5, "plated": true}]
+}
+```
+
+- `terminals[].layer` 仅 `top`/`bottom`; `holes[].diameter` 为正数; `plated` 为布尔
+- 拒绝: 重复 ID、非有限值(NaN/Infinity/1e999)、非正直径、重叠或相切的圆孔
+
+核对语义:
+
+- 每层先扣除全部孔盘, 再按剩余铜划分铜岛; 同层仅点接触不导通
+- 镀铜孔的孔壁连接两层所有沿孔周有正长度接触的铜岛(点接触不算), 支持多孔传递
+- 非镀铜孔只扣铜; 顶底平面重叠不直接导通
+- 端子落到指定层扣孔后的铜岛(边界算落铜); 多岛交点报 422 歧义;
+  未落铜端子列入 `unlanded_terminals`, 不参与短断路分组
+
+返回:
+
+```json
+{
+  "islands": {"top": 2, "bottom": 2},
+  "actual_nets": [{"id": 1, "islands": {"top": [1], "bottom": [1]},
+                   "holes": ["H1"],
+                   "terminals": [{"id": "T1", "net": "GND", "layer": "top"}]}],
+  "unlanded_terminals": [],
+  "shorts": [{"actual_net": 1, "nets": ["GND", "VCC"], "terminals": ["T1", "T2"],
+              "chain": [{"type": "island", "layer": "top", "index": 1},
+                        {"type": "hole", "id": "H1"},
+                        {"type": "island", "layer": "bottom", "index": 1}]}],
+  "opens": [{"net": "A", "groups": [["T1"], ["T2", "T3"]]}]
+}
+```
+
+- `shorts`: 异名网络同属一个实际网络, `chain` 给出铜岛与镀铜孔的连接链
+- `opens`: 同名网络已落铜端子分属多个实际网络, `groups` 为分离的端子组
+
+样例: `samples/netcheck_top.gbr` / `samples/netcheck_bottom.gbr` / `samples/netlist.json`
+(两个镀铜孔分别连通 GND/VCC, 一个非镀铜孔仅扣铜, 核对通过无短断路)。
 
 ## 自测
 
